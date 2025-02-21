@@ -1,0 +1,19 @@
+# Core dependencies
+Flask
+Flask-SQLAlchemy
+Flask-JWT-Extended
+Werkzeug
+SQLAlchemy
+PyJWT
+cryptography
+
+# Testing and development
+pytest
+pytest-cov
+black
+flake8
+python-dotenv
+
+# For later use in client
+PyQt6
+requests
