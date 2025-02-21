@@ -36,8 +36,38 @@ class PasswordEntry(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
 
+    current_version = db.Column(db.Integer, default=1)
+    
+    def create_version(self):
+        """Create a new version from current state"""
+        version = PasswordEntryVersion(
+            entry_id=self.id,
+            encrypted_data=self.encrypted_data
+        )
+        db.session.add(version)
+        self.current_version += 1
+        
+        # Remove old versions if more than 2
+        old_versions = self.versions.offset(2).all()
+        for old_version in old_versions:
+            db.session.delete(old_version)
+
     def __repr__(self):
         return f'<PasswordEntry {self.id}>'
+
+class PasswordEntryVersion(db.Model):
+    """Stores version history for password entries"""
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('password_entry.id'), nullable=False)
+    encrypted_data = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    
+    # Relationship to parent entry
+    entry = db.relationship('PasswordEntry', backref=db.backref(
+        'versions',
+        order_by='desc(PasswordEntryVersion.created_at)',
+        lazy='dynamic'
+    ))
 
 class UserVaultMeta(db.Model):
     """Stores user-specific vault metadata"""

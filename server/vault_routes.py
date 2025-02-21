@@ -1,7 +1,7 @@
 # server/vault_routes.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from server.models import db, PasswordEntry, User, UserVaultMeta
+from server.models import db, PasswordEntry, UserVaultMeta, User, PasswordEntryVersion
 from server.crypto import UserVault, VaultCrypto
 from datetime import datetime, UTC
 import json, base64, os
@@ -152,13 +152,20 @@ def update_entry(entry_id):
         entry = PasswordEntry.query.filter_by(id=entry_id, user_id=user_id).first()
         if not entry:
             return jsonify({'message': 'Entry not found'}), 404
-            
+        
+        # Create version before updating
+        entry.create_version()
+        
+        # Update entry
         entry.encrypted_data = data['encrypted_data']
         entry.updated_at = datetime.now(UTC)
         
         db.session.commit()
         
-        return jsonify({'message': 'Entry updated successfully'}), 200
+        return jsonify({
+            'message': 'Entry updated successfully',
+            'version': entry.current_version
+        }), 200
         
     except Exception as e:
         current_app.logger.error(f"Update entry error: {str(e)}")
@@ -184,4 +191,56 @@ def delete_entry(entry_id):
     except Exception as e:
         current_app.logger.error(f"Delete entry error: {str(e)}")
         db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
+
+@vault_api.route('/vault/entries/<int:entry_id>/versions', methods=['GET'])
+@jwt_required()
+def list_entry_versions(entry_id):
+    """List available versions of an entry"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        entry = PasswordEntry.query.filter_by(id=entry_id, user_id=user_id).first()
+        if not entry:
+            return jsonify({'message': 'Entry not found'}), 404
+            
+        versions = entry.versions.limit(2).all()
+        return jsonify({
+            'versions': [{
+                'id': version.id,
+                'encrypted_data': version.encrypted_data,
+                'created_at': version.created_at.isoformat()
+            } for version in versions]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"List versions error: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+@vault_api.route('/vault/entries/<int:entry_id>/versions/<int:version_id>', methods=['GET'])
+@jwt_required()
+def get_entry_version(entry_id, version_id):
+    """Get a specific version of an entry"""
+    try:
+        user_id = int(get_jwt_identity())
+        
+        entry = PasswordEntry.query.filter_by(id=entry_id, user_id=user_id).first()
+        if not entry:
+            return jsonify({'message': 'Entry not found'}), 404
+            
+        version = PasswordEntryVersion.query.filter_by(
+            id=version_id,
+            entry_id=entry_id
+        ).first()
+        if not version:
+            return jsonify({'message': 'Version not found'}), 404
+            
+        return jsonify({
+            'id': version.id,
+            'encrypted_data': version.encrypted_data,
+            'created_at': version.created_at.isoformat()
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get version error: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500

@@ -31,6 +31,7 @@ def app():
 def app_context(app):
     """Create app context for the tests."""
     with app.app_context() as ctx:
+        from server.models import User, PasswordEntry, UserVaultMeta, PasswordEntryVersion
         db.create_all()
         
         # Create test admin user
@@ -64,4 +65,30 @@ def admin_headers(app, client):
     assert response.status_code == 200, f"Login failed with response: {response.get_json()}"
     data = response.get_json()
     token = data['access_token']
+    return {'Authorization': f'Bearer {token}'}
+
+@pytest.fixture(scope='function')
+def user_headers(client, admin_headers):
+    """Create a regular user and get auth headers"""
+    # Create invite code using admin token
+    invite_response = client.post('/api/invite', headers=admin_headers)
+    assert invite_response.status_code == 201, f"Failed to create invite: {invite_response.get_json()}"
+    invite_code = invite_response.get_json()['invite_code']
+    
+    # Register new user
+    register_response = client.post('/api/register', json={
+        'email': 'test_user@test.com',
+        'password': 'test_password',
+        'invite_code': invite_code
+    })
+    assert register_response.status_code == 201, f"Failed to register user: {register_response.get_json()}"
+    
+    # Login as new user
+    login_response = client.post('/api/login', json={
+        'email': 'test_user@test.com',
+        'password': 'test_password'
+    })
+    assert login_response.status_code == 200, f"Failed to login as user: {login_response.get_json()}"
+    
+    token = login_response.get_json()['access_token']
     return {'Authorization': f'Bearer {token}'}
