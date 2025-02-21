@@ -36,3 +36,46 @@ class PasswordEntry(db.Model):
 
     def __repr__(self):
         return f'<PasswordEntry {self.name}>'
+
+class UserVaultMeta(db.Model):
+    """Stores user-specific vault metadata"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    key_salt = db.Column(db.String(64))  # Base64 encoded salt
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
+    
+    # Relationship to user
+    user = db.relationship('User', backref=db.backref('vault_meta', uselist=False))
+
+class UserVault:
+    def __init__(self, user_id: int, master_password: str):
+        self.user_id = user_id
+        # Generate initial key and salt
+        self.key, self.salt = VaultCrypto.derive_key(master_password)
+        
+    def encrypt_entry(self, entry_data: dict) -> dict:
+        """
+        Encrypt a password entry.
+        Returns encrypted data dict with salt and encrypted content.
+        """
+        encrypted = VaultCrypto.encrypt_data(entry_data, self.key)
+        encrypted['salt'] = base64.b64encode(self.salt).decode('utf-8')
+        return encrypted
+        
+    @staticmethod
+    def decrypt_entry(encrypted_data: dict, master_password: str) -> dict:
+        """
+        Decrypt a password entry using the master password.
+        """
+        # Decode the salt and derive the key
+        salt = base64.b64decode(encrypted_data['salt'])
+        key, _ = VaultCrypto.derive_key(master_password, salt)
+        
+        # Create dict with just the encrypted data
+        encrypted_content = {
+            'iv': encrypted_data['iv'],
+            'ciphertext': encrypted_data['ciphertext']
+        }
+        
+        return VaultCrypto.decrypt_data(encrypted_content, key)

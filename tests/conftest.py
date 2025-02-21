@@ -3,6 +3,7 @@ import pytest
 from server.app import create_app
 from server.models import db, User
 from server.config import Config
+from server.vault_routes import vault_api
 from datetime import timedelta
 from flask_jwt_extended import create_access_token
 import logging
@@ -16,12 +17,14 @@ class TestConfig(Config):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_TOKEN_LOCATION = ['headers']
     JWT_HEADER_TYPE = 'Bearer'
+    pass
 
 @pytest.fixture(scope='function')
 def app():
     """Create application for the tests."""
     app = create_app(TestConfig)
     app.logger.setLevel(logging.DEBUG)
+    app.register_blueprint(vault_api, url_prefix='/api')
     return app
 
 @pytest.fixture(scope='function')
