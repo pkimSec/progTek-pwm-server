@@ -7,11 +7,12 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True)  # Can be null for pending invites
-    password_hash = db.Column(db.String(256))  # Can be null for pending invites
+    email = db.Column(db.String(120), unique=True)
+    password_hash = db.Column(db.String(256))
     role = db.Column(db.String(20), nullable=False, default='user')
     invite_code = db.Column(db.String(36), unique=True)
-    is_active = db.Column(db.Boolean, default=False)  # False for pending invites
+    is_active = db.Column(db.Boolean, default=False)
+    vault_key_salt = db.Column(db.String(64))  # Salt for client-side key derivation
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -24,18 +25,19 @@ class User(db.Model):
         return str(uuid.uuid4())
 
 class PasswordEntry(db.Model):
+    """
+    Model for storing encrypted password entries.
+    All sensitive data is stored in encrypted_data as a JSON string.
+    The server never sees the decrypted content.
+    """
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    username = db.Column(db.String(100), nullable=False)
-    encrypted_password = db.Column(db.Text, nullable=False)
-    website = db.Column(db.String(200))
-    notes = db.Column(db.Text)
+    encrypted_data = db.Column(db.Text, nullable=False)  # Contains encrypted JSON with all entry data
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
 
     def __repr__(self):
-        return f'<PasswordEntry {self.name}>'
+        return f'<PasswordEntry {self.id}>'
 
 class UserVaultMeta(db.Model):
     """Stores user-specific vault metadata"""
