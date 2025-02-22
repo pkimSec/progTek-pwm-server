@@ -1,10 +1,11 @@
 # server/routes.py
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity,
     current_user, get_jwt
 )
 from server.models import db, User
+from datetime import datetime, timezone, UTC
 import uuid
 import logging
 
@@ -21,11 +22,19 @@ def login():
         current_app.logger.info(f"Login attempt for user: {data['email']}")
 
         if user and user.check_password(data['password']):
-            # Create token with string identity
+            # Create token
             access_token = create_access_token(
                 identity=str(user.id),
                 additional_claims={'role': user.role}
             )
+            
+            # Initialize session
+            session.clear()
+            session['user_id'] = user.id
+            session['created_at'] = datetime.now(UTC).isoformat()
+            session['role'] = user.role
+            session.permanent = True
+            
             current_app.logger.info(f"Login successful for user ID: {user.id}")
             return jsonify({
                 'access_token': access_token,
@@ -37,6 +46,19 @@ def login():
 
     except Exception as e:
         current_app.logger.error(f"Login error: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """Logout and clear session"""
+    try:
+        session.clear()
+        current_app.logger.info(f"User logged out: {get_jwt_identity()}")
+        return jsonify({'message': 'Logged out successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Logout error: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
 
 @api.route('/invite', methods=['POST'])

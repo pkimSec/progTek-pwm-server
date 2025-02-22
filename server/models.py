@@ -7,11 +7,12 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True)  # Can be null for pending invites
-    password_hash = db.Column(db.String(256))  # Can be null for pending invites
+    email = db.Column(db.String(120), unique=True)
+    password_hash = db.Column(db.String(256))
     role = db.Column(db.String(20), nullable=False, default='user')
     invite_code = db.Column(db.String(36), unique=True)
-    is_active = db.Column(db.Boolean, default=False)  # False for pending invites
+    is_active = db.Column(db.Boolean, default=False)
+    vault_key_salt = db.Column(db.String(64))  # Salt for client-side key derivation
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -24,18 +25,49 @@ class User(db.Model):
         return str(uuid.uuid4())
 
 class PasswordEntry(db.Model):
+    """
+    Model for storing encrypted password entries.
+    All sensitive data is stored in encrypted_data as a JSON string.
+    The server never sees the decrypted content.
+    """
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    username = db.Column(db.String(100), nullable=False)
-    encrypted_password = db.Column(db.Text, nullable=False)
-    website = db.Column(db.String(200))
-    notes = db.Column(db.Text)
+    encrypted_data = db.Column(db.Text, nullable=False)  # Contains encrypted JSON with all entry data
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
 
+    current_version = db.Column(db.Integer, default=1)
+    
+    def create_version(self):
+        """Create a new version from current state"""
+        version = PasswordEntryVersion(
+            entry_id=self.id,
+            encrypted_data=self.encrypted_data
+        )
+        db.session.add(version)
+        self.current_version += 1
+        
+        # Remove old versions if more than 2
+        old_versions = self.versions.offset(2).all()
+        for old_version in old_versions:
+            db.session.delete(old_version)
+
     def __repr__(self):
-        return f'<PasswordEntry {self.name}>'
+        return f'<PasswordEntry {self.id}>'
+
+class PasswordEntryVersion(db.Model):
+    """Stores version history for password entries"""
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('password_entry.id'), nullable=False)
+    encrypted_data = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    
+    # Relationship to parent entry
+    entry = db.relationship('PasswordEntry', backref=db.backref(
+        'versions',
+        order_by='desc(PasswordEntryVersion.created_at)',
+        lazy='dynamic'
+    ))
 
 class UserVaultMeta(db.Model):
     """Stores user-specific vault metadata"""

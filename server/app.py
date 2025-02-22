@@ -4,8 +4,10 @@ from flask_jwt_extended import JWTManager
 from server.config import Config
 from server.models import db, User
 from server.routes import api
-import secrets
-import logging
+from server.limiter import limiter, init_limiter
+from server.session import SessionManager
+from server.security import SecurityHeaders
+import secrets, logging
 
 def create_app(config_class=Config):
     """Application factory function."""
@@ -18,6 +20,9 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
     jwt = JWTManager(app)
+    SessionManager(app)
+    SecurityHeaders(app)
+    init_limiter(app)
 
     # JWT configuration
     @jwt.user_lookup_loader
