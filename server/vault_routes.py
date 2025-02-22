@@ -3,6 +3,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from server.models import db, PasswordEntry, UserVaultMeta, User, PasswordEntryVersion
 from server.crypto import UserVault, VaultCrypto
+from server.session import requires_active_session
+from server.security import requires_secure_transport
 from datetime import datetime, UTC
 import json, base64, os
 
@@ -10,6 +12,8 @@ vault_api = Blueprint('vault_api', __name__)
 
 @vault_api.route('/vault/setup', methods=['POST'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def setup_vault():
     """Initialize user's vault with master password"""
     try:
@@ -43,6 +47,8 @@ def setup_vault():
 
 @vault_api.route('/vault/salt', methods=['GET'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def get_vault_salt():
     """Get user's vault key salt for client-side key derivation"""
     try:
@@ -64,6 +70,8 @@ def get_vault_salt():
 
 @vault_api.route('/vault/entries', methods=['POST'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def create_entry():
     """
     Create new password entry.
@@ -97,6 +105,8 @@ def create_entry():
 
 @vault_api.route('/vault/entries', methods=['GET'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def list_entries():
     """List all encrypted entries for the user"""
     try:
@@ -118,6 +128,8 @@ def list_entries():
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['GET'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def get_entry(entry_id):
     """Get specific encrypted entry"""
     try:
@@ -140,6 +152,8 @@ def get_entry(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['PUT'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def update_entry(entry_id):
     """Update encrypted entry"""
     try:
@@ -174,6 +188,8 @@ def update_entry(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['DELETE'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def delete_entry(entry_id):
     """Delete entry"""
     try:
@@ -195,6 +211,8 @@ def delete_entry(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>/versions', methods=['GET'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def list_entry_versions(entry_id):
     """List available versions of an entry"""
     try:
@@ -219,6 +237,8 @@ def list_entry_versions(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>/versions/<int:version_id>', methods=['GET'])
 @jwt_required()
+@requires_active_session
+@requires_secure_transport
 def get_entry_version(entry_id, version_id):
     """Get a specific version of an entry"""
     try:
