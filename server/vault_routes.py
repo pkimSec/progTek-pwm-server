@@ -61,12 +61,16 @@ def setup_vault():
 def get_vault_salt():
     """Get user's vault key salt for client-side key derivation"""
     try:
-        # Log the incoming request
+        # Log the incoming request and headers
         current_app.logger.debug("Received request for vault salt")
+        current_app.logger.debug(f"Request headers: {dict(request.headers)}")
         
         # Get and log the user ID from JWT
         user_id = get_jwt_identity()
         current_app.logger.debug(f"JWT identity: {user_id}")
+        
+        # Log session info
+        current_app.logger.debug(f"Session data: {dict(session)}")
         
         try:
             user_id = int(user_id)
@@ -77,7 +81,7 @@ def get_vault_salt():
             
         # Try to get the user
         user = db.session.get(User, user_id)
-        current_app.logger.debug(f"Retrieved user: {user}")
+        current_app.logger.debug(f"Retrieved user object: {user}")
         
         if not user:
             current_app.logger.warning(f"No user found for ID: {user_id}")
@@ -87,7 +91,6 @@ def get_vault_salt():
         
         if not user.vault_key_salt:
             current_app.logger.info(f"Generating new salt for user {user_id}")
-            # Generate salt if it doesn't exist
             user.vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
             db.session.commit()
             current_app.logger.debug(f"New salt generated: {user.vault_key_salt}")
@@ -99,7 +102,7 @@ def get_vault_salt():
     except Exception as e:
         current_app.logger.error(f"Error in get_vault_salt: {str(e)}", exc_info=True)
         return jsonify({'message': 'Internal server error'}), 500
-
+        
 @vault_api.route('/vault/entries', methods=['POST'])
 @jwt_required()
 @requires_active_session

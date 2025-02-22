@@ -4,6 +4,7 @@ from flask_jwt_extended import JWTManager
 from server.config import Config
 from server.models import db, User, UserVaultMeta
 from server.routes import api
+from server.vault_routes import vault_api
 from server.limiter import limiter, init_limiter
 from server.session import SessionManager
 from server.security import SecurityHeaders
@@ -46,6 +47,7 @@ def create_app(config_class=Config):
 
     # Register blueprint
     app.register_blueprint(api, url_prefix='/api')
+    app.register_blueprint(vault_api, url_prefix='/api')
 
     # Ensure database and tables exist
     with app.app_context():
