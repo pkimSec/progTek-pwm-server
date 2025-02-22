@@ -6,8 +6,7 @@ from flask_jwt_extended import (
 )
 from server.models import db, User
 from datetime import datetime, timezone, UTC
-import uuid
-import logging
+import uuid, secrets, base64, os, logging
 
 api = Blueprint('api', __name__)
 
@@ -132,9 +131,13 @@ def register():
         if User.query.filter_by(email=data['email']).first():
             return jsonify({'message': 'Email already registered'}), 400
 
+        # Generate vault key salt during registration
+        vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+        
         invite.email = data['email']
         invite.set_password(data['password'])
         invite.is_active = True
+        invite.vault_key_salt = vault_key_salt
         
         db.session.commit()
         current_app.logger.info(f"Registered new user: {data['email']}")

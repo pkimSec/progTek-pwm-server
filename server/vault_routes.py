@@ -15,7 +15,7 @@ vault_api = Blueprint('vault_api', __name__)
 @requires_active_session
 @requires_secure_transport
 def setup_vault():
-    """Initialize user's vault with master password"""
+    """Initialize user's vault if not already set up"""
     try:
         user_id = int(get_jwt_identity())
         data = request.get_json()
@@ -23,9 +23,15 @@ def setup_vault():
         if not data or 'master_password' not in data:
             return jsonify({'message': 'Master password required'}), 400
             
-        # Check if vault already exists
-        if UserVaultMeta.query.filter_by(user_id=user_id).first():
-            return jsonify({'message': 'Vault already initialized'}), 400
+        # Get user and ensure they exist
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+            
+        # Check if vault salt exists, if not generate it
+        if not user.vault_key_salt:
+            user.vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+            db.session.commit()
             
         # Create new vault
         vault = UserVault(user_id, data['master_password'])
@@ -38,7 +44,10 @@ def setup_vault():
         db.session.add(meta)
         db.session.commit()
         
-        return jsonify({'message': 'Vault initialized successfully'}), 201
+        return jsonify({
+            'message': 'Vault initialized successfully',
+            'salt': user.vault_key_salt
+        }), 201
         
     except Exception as e:
         current_app.logger.error(f"Vault setup error: {str(e)}")
@@ -52,20 +61,43 @@ def setup_vault():
 def get_vault_salt():
     """Get user's vault key salt for client-side key derivation"""
     try:
-        user_id = int(get_jwt_identity())
+        # Log the incoming request
+        current_app.logger.debug("Received request for vault salt")
+        
+        # Get and log the user ID from JWT
+        user_id = get_jwt_identity()
+        current_app.logger.debug(f"JWT identity: {user_id}")
+        
+        try:
+            user_id = int(user_id)
+            current_app.logger.debug(f"Converted user_id to int: {user_id}")
+        except (ValueError, TypeError) as e:
+            current_app.logger.error(f"Failed to convert user_id to int: {str(e)}")
+            return jsonify({'message': 'Invalid user ID'}), 400
+            
+        # Try to get the user
         user = db.session.get(User, user_id)
+        current_app.logger.debug(f"Retrieved user: {user}")
+        
+        if not user:
+            current_app.logger.warning(f"No user found for ID: {user_id}")
+            return jsonify({'message': 'User not found'}), 404
+            
+        current_app.logger.debug(f"Current vault key salt: {user.vault_key_salt}")
         
         if not user.vault_key_salt:
-            # Generate salt if not exists
+            current_app.logger.info(f"Generating new salt for user {user_id}")
+            # Generate salt if it doesn't exist
             user.vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
             db.session.commit()
+            current_app.logger.debug(f"New salt generated: {user.vault_key_salt}")
             
         return jsonify({
             'salt': user.vault_key_salt
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"Error getting vault salt: {str(e)}")
+        current_app.logger.error(f"Error in get_vault_salt: {str(e)}", exc_info=True)
         return jsonify({'message': 'Internal server error'}), 500
 
 @vault_api.route('/vault/entries', methods=['POST'])
