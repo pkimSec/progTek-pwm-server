@@ -1,14 +1,8 @@
-# progTek-pwm
+# progTek-pwm-Server
 
 progTek-pwm is an open-source password-manager built on python.
 
 ## Installation
-
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install progTek-pwm.
-
-```bash
-pip install progtek-pwm
-```
 
 ## Usage
 
