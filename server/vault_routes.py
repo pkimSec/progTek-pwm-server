@@ -60,6 +60,8 @@ def setup_vault():
 @requires_secure_transport
 def get_vault_salt():
     """Get user's vault key salt for client-side key derivation"""
+    print(f"Session data: {session}")
+    print(f"user_id in session: {session.get('user_id')}")
     try:
         # Log the incoming request and headers
         current_app.logger.debug("Received request for vault salt")

@@ -48,7 +48,7 @@ def create_app(config_class=Config):
     # Register blueprint
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(vault_api, url_prefix='/api')
-
+    
     # Ensure database and tables exist
     with app.app_context():
         # Drop all tables first (since we're in development)
