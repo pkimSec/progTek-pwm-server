@@ -36,7 +36,7 @@ progTek-pwm is an open-source password manager built with Python, offering stron
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/progTek-pwm-Server.git
+   git clone https://github.com/pkimSec/progTek-pwm-Server.git
    cd progTek-pwm-Server
    ```
 
