@@ -1,9 +1,10 @@
 # server/vault_routes.py
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from server.models import db, PasswordEntry, UserVaultMeta, User, PasswordEntryVersion
 from server.crypto import UserVault, VaultCrypto
 from server.session import requires_active_session
+from server.api_session import requires_api_session
 from server.security import requires_secure_transport
 from datetime import datetime, UTC
 import json, base64, os
@@ -12,10 +13,10 @@ vault_api = Blueprint('vault_api', __name__)
 
 @vault_api.route('/vault/setup', methods=['POST'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def setup_vault():
-    """Initialize user's vault with master password"""
+    """Initialize user's vault if not already set up"""
     try:
         user_id = int(get_jwt_identity())
         data = request.get_json()
@@ -23,9 +24,15 @@ def setup_vault():
         if not data or 'master_password' not in data:
             return jsonify({'message': 'Master password required'}), 400
             
-        # Check if vault already exists
-        if UserVaultMeta.query.filter_by(user_id=user_id).first():
-            return jsonify({'message': 'Vault already initialized'}), 400
+        # Get user and ensure they exist
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+            
+        # Check if vault salt exists, if not generate it
+        if not user.vault_key_salt:
+            user.vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+            db.session.commit()
             
         # Create new vault
         vault = UserVault(user_id, data['master_password'])
@@ -38,7 +45,10 @@ def setup_vault():
         db.session.add(meta)
         db.session.commit()
         
-        return jsonify({'message': 'Vault initialized successfully'}), 201
+        return jsonify({
+            'message': 'Vault initialized successfully',
+            'salt': user.vault_key_salt
+        }), 201
         
     except Exception as e:
         current_app.logger.error(f"Vault setup error: {str(e)}")
@@ -46,14 +56,16 @@ def setup_vault():
         return jsonify({'message': 'Internal server error'}), 500
 
 @vault_api.route('/vault/salt', methods=['GET'])
-@jwt_required()
-@requires_active_session
+@requires_api_session 
 @requires_secure_transport
 def get_vault_salt():
     """Get user's vault key salt for client-side key derivation"""
     try:
         user_id = int(get_jwt_identity())
         user = db.session.get(User, user_id)
+        
+        # Debug logging
+        print(f"Session data: {dict(session)}")  # Convert to dict for printing
         
         if not user.vault_key_salt:
             # Generate salt if not exists
@@ -67,10 +79,9 @@ def get_vault_salt():
     except Exception as e:
         current_app.logger.error(f"Error getting vault salt: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
-
+        
 @vault_api.route('/vault/entries', methods=['POST'])
-@jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def create_entry():
     """
@@ -92,10 +103,12 @@ def create_entry():
         db.session.add(entry)
         db.session.commit()
         
+        # Return the complete entry data that matches the client model
         return jsonify({
-            'message': 'Entry created successfully',
             'id': entry.id,
-            'created_at': entry.created_at.isoformat()
+            'encrypted_data': entry.encrypted_data,
+            'created_at': entry.created_at.isoformat(),
+            'updated_at': entry.updated_at.isoformat()
         }), 201
         
     except Exception as e:
@@ -105,7 +118,7 @@ def create_entry():
 
 @vault_api.route('/vault/entries', methods=['GET'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def list_entries():
     """List all encrypted entries for the user"""
@@ -128,7 +141,7 @@ def list_entries():
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['GET'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def get_entry(entry_id):
     """Get specific encrypted entry"""
@@ -152,7 +165,7 @@ def get_entry(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['PUT'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def update_entry(entry_id):
     """Update encrypted entry"""
@@ -187,18 +200,22 @@ def update_entry(entry_id):
         return jsonify({'message': 'Internal server error'}), 500
 
 @vault_api.route('/vault/entries/<int:entry_id>', methods=['DELETE'])
-@jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def delete_entry(entry_id):
     """Delete entry"""
     try:
         user_id = int(get_jwt_identity())
         
+        # Get entry
         entry = PasswordEntry.query.filter_by(id=entry_id, user_id=user_id).first()
         if not entry:
             return jsonify({'message': 'Entry not found'}), 404
             
+        # First delete versions
+        PasswordEntryVersion.query.filter_by(entry_id=entry_id).delete()
+        
+        # Then delete the entry itself
         db.session.delete(entry)
         db.session.commit()
         
@@ -211,7 +228,7 @@ def delete_entry(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>/versions', methods=['GET'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def list_entry_versions(entry_id):
     """List available versions of an entry"""
@@ -237,7 +254,7 @@ def list_entry_versions(entry_id):
 
 @vault_api.route('/vault/entries/<int:entry_id>/versions/<int:version_id>', methods=['GET'])
 @jwt_required()
-@requires_active_session
+@requires_api_session
 @requires_secure_transport
 def get_entry_version(entry_id, version_id):
     """Get a specific version of an entry"""

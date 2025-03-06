@@ -12,7 +12,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, default='user')
     invite_code = db.Column(db.String(36), unique=True)
     is_active = db.Column(db.Boolean, default=False)
-    vault_key_salt = db.Column(db.String(64))  # Salt for client-side key derivation
+    vault_key_salt = db.Column(db.String(64), nullable=True)  # Salt for client-side key derivation
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

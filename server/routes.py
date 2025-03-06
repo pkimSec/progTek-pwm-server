@@ -9,6 +9,8 @@ from datetime import datetime, timezone, UTC
 import uuid
 import logging
 
+from server.api_session import create_api_session
+
 api = Blueprint('api', __name__)
 
 @api.route('/login', methods=['POST'])
@@ -35,11 +37,17 @@ def login():
             session['role'] = user.role
             session.permanent = True
             
+            # Create API session token for non-browser clients
+            session_token = create_api_session(user.id)
+            
             current_app.logger.info(f"Login successful for user ID: {user.id}")
+            
+            # Return both the JWT token and session token
             return jsonify({
                 'access_token': access_token,
                 'role': user.role,
-                'user_id': user.id
+                'user_id': user.id,
+                'session_token': session_token  # Add this to the response
             }), 200
 
         return jsonify({'message': 'Invalid credentials'}), 401
@@ -101,6 +109,8 @@ def debug_token():
     user_id = get_jwt_identity()
     jwt_data = get_jwt()
     current_app.logger.info(f"Debug token data - User ID: {user_id}, JWT: {jwt_data}")
+    current_app.logger.info(f"Session data: {session}")
+    current_app.logger.info(f"user_id in session: {session.get('user_id')}")
     
     user = db.session.get(User, int(user_id))
     return jsonify({
@@ -109,6 +119,15 @@ def debug_token():
         'role': jwt_data.get('role'),
         'jwt_data': jwt_data
     }), 200
+
+@api.route('/api/debug/session', methods=['GET'])
+def debug_session():
+    from flask import session
+    return jsonify({
+        'session_data': dict(session),
+        'session_headers': dict(request.headers),
+        'cookies': request.cookies
+    })
 
 @api.route('/register', methods=['POST'])
 def register():
@@ -132,9 +151,13 @@ def register():
         if User.query.filter_by(email=data['email']).first():
             return jsonify({'message': 'Email already registered'}), 400
 
+        # Generate vault key salt during registration
+        vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+        
         invite.email = data['email']
         invite.set_password(data['password'])
         invite.is_active = True
+        invite.vault_key_salt = vault_key_salt
         
         db.session.commit()
         current_app.logger.info(f"Registered new user: {data['email']}")
