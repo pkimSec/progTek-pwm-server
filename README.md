@@ -1,4 +1,4 @@
-# progTek-pwm Password Manager
+# progTek-pwm-Server
 
 progTek-pwm is an open-source password manager built with Python, offering strong security and end-to-end encryption. This project consists of a server component (this repository) and a client application [progTek-pwm-Client](https://github.com/pkimSec/progTek-pwm-Client).
 
