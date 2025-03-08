@@ -1,4 +1,8 @@
 # server/routes.py
+import uuid
+import base64
+import os
+import logging
 from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity,
@@ -6,8 +10,6 @@ from flask_jwt_extended import (
 )
 from server.models import db, User
 from datetime import datetime, timezone, UTC
-import uuid
-import logging
 
 from server.api_session import create_api_session
 
@@ -131,14 +133,21 @@ def debug_session():
 
 @api.route('/register', methods=['POST'])
 def register():
+    """Register a new user with an invite code"""
     try:
+        current_app.logger.info("Processing registration request")
         data = request.get_json()
+        current_app.logger.info(f"Registration data received: {data}")
+        
         if not data:
+            current_app.logger.error("No input data provided")
             return jsonify({'message': 'No input data provided'}), 400
 
         if not all(k in data for k in ['email', 'password', 'invite_code']):
+            current_app.logger.error("Missing required fields")
             return jsonify({'message': 'Missing required fields'}), 400
 
+        # Find the invite by code
         invite = User.query.filter_by(
             invite_code=data['invite_code'],
             is_active=False,
@@ -146,14 +155,19 @@ def register():
         ).first()
         
         if not invite:
+            current_app.logger.error(f"Invalid invite code: {data['invite_code']}")
             return jsonify({'message': 'Invalid invite code'}), 400
 
+        # Check if email already exists
         if User.query.filter_by(email=data['email']).first():
+            current_app.logger.error(f"Email already registered: {data['email']}")
             return jsonify({'message': 'Email already registered'}), 400
 
         # Generate vault key salt during registration
         vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+        current_app.logger.info(f"Generated vault key salt for new user")
         
+        # Update the invite record to become a user
         invite.email = data['email']
         invite.set_password(data['password'])
         invite.is_active = True
@@ -165,6 +179,8 @@ def register():
 
     except Exception as e:
         current_app.logger.error(f"Registration error: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
 
