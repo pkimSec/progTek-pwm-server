@@ -2,10 +2,13 @@
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from server.config import Config
-from server.models import db, User, UserVaultMeta
+from server.models import db, User, UserVaultMeta, Category
+
 from server.routes import api
 from server.vault_routes import vault_api
 from server.user_routes import user_api
+from server.category_routes import category_api
+
 from server.limiter import limiter, init_limiter
 from server.session import SessionManager
 from server.security import SecurityHeaders
@@ -46,16 +49,16 @@ def create_app(config_class=Config):
             pass
         return {"role": None}
 
-    # Register blueprint
+    # Register blueprints
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(vault_api, url_prefix='/api')
     app.register_blueprint(user_api, url_prefix='/api')
+    app.register_blueprint(category_api, url_prefix='/api')
     
     # Ensure database and tables exist
     with app.app_context():
-        # Drop all tables first (since its in development)
-        db.drop_all()
         # Create all tables fresh
+        db.drop_all()
         db.create_all()
         
         admin = User.query.filter_by(role='admin', is_active=True).first()
@@ -76,12 +79,21 @@ def create_app(config_class=Config):
             
             # Initialize admin's vault metadata
             meta = UserVaultMeta(
-                user_id=admin.id,
+                user_id=1,  # Use 1 since it's the first user
                 key_salt=vault_key_salt
             )
             db.session.add(meta)
             
-            # Commit both changes
+            # Create default categories for admin
+            default_categories = ["Business", "Finance", "Personal", "Email", "Shopping"]
+            for category_name in default_categories:
+                category = Category(
+                    user_id=1,  # Use 1 since it's the first user
+                    name=category_name
+                )
+                db.session.add(category)
+            
+            # Commit all changes
             db.session.commit()
             
             print("==============================")

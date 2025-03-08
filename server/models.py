@@ -111,3 +111,33 @@ class UserVault:
         }
         
         return VaultCrypto.decrypt_data(encrypted_content, key)
+
+class Category(db.Model):
+    """Model for organizing password entries into categories"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(64), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
+    
+    # Relationship to parent category (self-referential)
+    parent = db.relationship('Category', remote_side=[id], backref=db.backref(
+        'children', cascade='all, delete-orphan'
+    ))
+    
+    # Relationship to user
+    user = db.relationship('User', backref=db.backref('categories', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<Category {self.name}>'
+    
+    def to_dict(self):
+        """Convert category to dictionary"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'parent_id': self.parent_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
