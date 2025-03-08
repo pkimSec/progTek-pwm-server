@@ -249,3 +249,12 @@ def deactivate_invite(invite_code):
         current_app.logger.error(f"Deactivate invite error: {str(e)}")
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/ping', methods=['GET'])
+def ping():
+    """Simple health check endpoint that doesn't require authentication"""
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'message': 'Server is running'
+    }), 200
