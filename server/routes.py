@@ -167,3 +167,69 @@ def register():
         current_app.logger.error(f"Registration error: {str(e)}")
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/invites', methods=['GET'])
+@jwt_required()
+def list_invites():
+    """List all invite codes (admin only)"""
+    try:
+        # Check admin permission
+        jwt_data = get_jwt()
+        if jwt_data.get('role') != 'admin':
+            return jsonify({'message': 'Admin role required'}), 403
+            
+        # Get all invite codes
+        invites = User.query.filter(
+            User.invite_code.isnot(None)
+        ).all()
+        
+        # Convert to list of dicts
+        invite_list = []
+        for user in invites:
+            invite_data = {
+                'code': user.invite_code,
+                'is_used': user.email is not None,
+                'email': user.email,
+                'created_at': user.created_at.isoformat() if hasattr(user, 'created_at') else None
+            }
+            invite_list.append(invite_data)
+        
+        return jsonify({
+            'invite_codes': invite_list
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"List invites error: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/invites/<invite_code>', methods=['DELETE'])
+@jwt_required()
+def deactivate_invite(invite_code):
+    """Deactivate an invite code (admin only)"""
+    try:
+        # Check admin permission
+        jwt_data = get_jwt()
+        if jwt_data.get('role') != 'admin':
+            return jsonify({'message': 'Admin role required'}), 403
+            
+        # Find the invite code
+        user = User.query.filter_by(invite_code=invite_code).first()
+        if not user:
+            return jsonify({'message': 'Invite code not found'}), 404
+            
+        # Check if already used
+        if user.email is not None:
+            return jsonify({'message': 'Cannot deactivate used invite code'}), 400
+            
+        # Delete the user record with the invite code
+        db.session.delete(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Invite code deactivated successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Deactivate invite error: {str(e)}")
+        db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
