@@ -17,9 +17,11 @@ def create_api_session(user_id):
     }
     return session_token
 
+
 def get_api_session():
     """Get API session from header"""
-    session_token = request.headers.get('X-API-Session-Token')
+    # Check both header variations for backward compatibility
+    session_token = request.headers.get('X-API-Session-Token') or request.headers.get('X-Session-ID')
     if session_token and session_token in api_sessions:
         return api_sessions[session_token]
     return None
