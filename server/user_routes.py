@@ -1,9 +1,11 @@
 # server/user_routes.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from server.models import db, User
+from server.models import db, User, UserVaultMeta
 from server.api_session import requires_api_session
 from server.security import requires_secure_transport
+
+import base64, os, json
 
 user_api = Blueprint('user_api', __name__)
 
@@ -185,5 +187,53 @@ def delete_user(user_id):
         
     except Exception as e:
         current_app.logger.error(f"Delete user error: {str(e)}")
+        db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
+
+@user_api.route('/users/password', methods=['PUT'])
+@jwt_required()
+@requires_api_session
+@requires_secure_transport
+def change_password():
+    """Change user's password"""
+    try:
+        # Get user ID from JWT
+        user_id = int(get_jwt_identity())
+        
+        # Get data from request
+        data = request.get_json()
+        if not data or 'current_password' not in data or 'new_password' not in data:
+            return jsonify({'message': 'Missing required fields'}), 400
+        
+        # Get current user
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Verify current password
+        if not user.check_password(data['current_password']):
+            return jsonify({'message': 'Current password is incorrect'}), 401
+        
+        # Set new password
+        user.set_password(data['new_password'])
+        
+        # Update vault key salt for the new password
+        new_vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
+        user.vault_key_salt = new_vault_key_salt
+        
+        # Also update vault metadata if it exists
+        vault_meta = UserVaultMeta.query.filter_by(user_id=user_id).first()
+        if vault_meta:
+            vault_meta.key_salt = new_vault_key_salt
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Password changed successfully',
+            'new_salt': new_vault_key_salt
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error changing password: {str(e)}")
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
