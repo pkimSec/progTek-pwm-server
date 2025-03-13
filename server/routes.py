@@ -9,9 +9,11 @@ from flask_jwt_extended import (
     current_user, get_jwt
 )
 from server.models import db, User
-from server.api_session import create_api_session, requires_api_session
+from server.api_session import create_api_session, requires_api_session, api_sessions, update_session_activity
 
 api = Blueprint('api', __name__)
+
+# ---------- LOGIN/LOGOUT ----------
 
 @api.route('/login', methods=['POST'])
 def login():
@@ -69,39 +71,7 @@ def logout():
         current_app.logger.error(f"Logout error: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
 
-@api.route('/invite', methods=['POST'])
-@jwt_required()
-def create_invite():
-    try:
-        # Get user ID from token
-        user_id = get_jwt_identity()
-        current_app.logger.info(f"Processing invite request for user ID: {user_id}")
-        
-        # Convert string ID back to integer and get user
-        current_user = db.session.get(User, int(user_id))
-        if not current_user or current_user.role != 'admin':
-            return jsonify({'message': 'Unauthorized'}), 403
-
-        # Create invite code
-        invite_code = str(uuid.uuid4())
-        new_invite = User(
-            email=None,
-            password_hash=None,
-            role='user',
-            invite_code=invite_code,
-            is_active=False
-        )
-        
-        db.session.add(new_invite)
-        db.session.commit()
-        
-        current_app.logger.info(f"Created invite code: {invite_code}")
-        return jsonify({'invite_code': invite_code}), 201
-
-    except Exception as e:
-        current_app.logger.error(f"Error in create_invite: {str(e)}")
-        db.session.rollback()
-        return jsonify({'message': 'Internal server error'}), 500
+# ---------- DEBUG ----------
 
 @api.route('/debug/token', methods=['GET'])
 @jwt_required()
@@ -128,6 +98,8 @@ def debug_session():
         'session_headers': dict(request.headers),
         'cookies': request.cookies
     })
+
+# ---------- ADMIN ROUTES / SYSTEM INFORMATION ----------
 
 @api.route('/admin/system', methods=['GET'])
 @jwt_required()
@@ -174,6 +146,67 @@ def get_system_info():
     except Exception as e:
         current_app.logger.error(f"Error getting system info: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/admin/sessions', methods=['GET'])
+@jwt_required()
+@requires_api_session
+def get_active_sessions():
+    """Get all active sessions (admin only)"""
+    try:
+        # Check admin permission
+        jwt_data = get_jwt()
+        if jwt_data.get('role') != 'admin':
+            return jsonify({'message': 'Admin role required'}), 403
+            
+        # Get all sessions from the api_sessions dictionary
+        all_sessions = []
+        for session_token, session_data in api_sessions.items():
+            # Get user info
+            user_id = session_data.get('user_id')
+            user = db.session.get(User, user_id) if user_id else None
+            
+            session_info = {
+                'session_token': session_token,
+                'user_id': user_id,
+                'email': user.email if user else 'Unknown',
+                'role': user.role if user else 'Unknown',
+                'created_at': session_data.get('created_at').isoformat() if session_data.get('created_at') else None,
+                'last_activity': session_data.get('last_activity', session_data.get('created_at')).isoformat() 
+                    if session_data.get('last_activity') or session_data.get('created_at') else None
+            }
+            all_sessions.append(session_info)
+            
+        return jsonify({'sessions': all_sessions}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting active sessions: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/admin/sessions/<session_token>', methods=['DELETE'])
+@jwt_required()
+@requires_api_session
+def terminate_session(session_token):
+    """Terminate a session (admin only)"""
+    try:
+        # Check admin permission
+        jwt_data = get_jwt()
+        if jwt_data.get('role') != 'admin':
+            return jsonify({'message': 'Admin role required'}), 403
+            
+        # Check if session exists
+        if session_token not in api_sessions:
+            return jsonify({'message': 'Session not found'}), 404
+            
+        # Remove session
+        del api_sessions[session_token]
+        
+        return jsonify({'message': 'Session terminated successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error terminating session: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+# ---------- REGISTRATION / INVITES ----------
 
 @api.route('/register', methods=['POST'])
 def register():
@@ -225,6 +258,40 @@ def register():
         current_app.logger.error(f"Registration error: {str(e)}")
         import traceback
         current_app.logger.error(traceback.format_exc())
+        db.session.rollback()
+        return jsonify({'message': 'Internal server error'}), 500
+
+@api.route('/invite', methods=['POST'])
+@jwt_required()
+def create_invite():
+    try:
+        # Get user ID from token
+        user_id = get_jwt_identity()
+        current_app.logger.info(f"Processing invite request for user ID: {user_id}")
+        
+        # Convert string ID back to integer and get user
+        current_user = db.session.get(User, int(user_id))
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'message': 'Unauthorized'}), 403
+
+        # Create invite code
+        invite_code = str(uuid.uuid4())
+        new_invite = User(
+            email=None,
+            password_hash=None,
+            role='user',
+            invite_code=invite_code,
+            is_active=False
+        )
+        
+        db.session.add(new_invite)
+        db.session.commit()
+        
+        current_app.logger.info(f"Created invite code: {invite_code}")
+        return jsonify({'invite_code': invite_code}), 201
+
+    except Exception as e:
+        current_app.logger.error(f"Error in create_invite: {str(e)}")
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
 
@@ -293,6 +360,8 @@ def deactivate_invite(invite_code):
         current_app.logger.error(f"Deactivate invite error: {str(e)}")
         db.session.rollback()
         return jsonify({'message': 'Internal server error'}), 500
+
+# ---------- SERVER PING ----------
 
 @api.route('/ping', methods=['GET'])
 def ping():
