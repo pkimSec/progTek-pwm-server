@@ -6,6 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 class User(db.Model):
+    __tablename__ = 'users'
+    
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True)
     password_hash = db.Column(db.String(256))
@@ -30,8 +32,9 @@ class PasswordEntry(db.Model):
     All sensitive data is stored in encrypted_data as a JSON string.
     The server never sees the decrypted content.
     """
+    __tablename__ = 'password_entries'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     encrypted_data = db.Column(db.Text, nullable=False)  # Contains encrypted JSON with all entry data
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
@@ -57,8 +60,9 @@ class PasswordEntry(db.Model):
 
 class PasswordEntryVersion(db.Model):
     """Stores version history for password entries"""
+    __tablename__ = 'password_entry_versions'
     id = db.Column(db.Integer, primary_key=True)
-    entry_id = db.Column(db.Integer, db.ForeignKey('password_entry.id'), nullable=False)
+    entry_id = db.Column(db.Integer, db.ForeignKey('password_entries.id'), nullable=False)
     encrypted_data = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     
@@ -71,8 +75,9 @@ class PasswordEntryVersion(db.Model):
 
 class UserVaultMeta(db.Model):
     """Stores user-specific vault metadata"""
+    __tablename__ = 'user_vault_metas'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True)
     key_salt = db.Column(db.String(64))  # Base64 encoded salt
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
@@ -114,10 +119,11 @@ class UserVault:
 
 class Category(db.Model):
     """Model for organizing password entries into categories"""
+    __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     name = db.Column(db.String(64), nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now())
     

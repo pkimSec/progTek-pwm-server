@@ -1,6 +1,9 @@
 # server/app.py
 from flask import Flask
+from flask_migrate import Migrate
+from flask_session import Session
 from flask_jwt_extended import JWTManager
+
 from server.config import Config
 from server.models import db, User, UserVaultMeta, Category
 
@@ -12,6 +15,7 @@ from server.category_routes import category_api
 from server.limiter import limiter, init_limiter
 from server.session import SessionManager
 from server.security import SecurityHeaders
+from server.db_utils import ensure_db_exists
 
 import secrets, logging, base64, os
 from datetime import datetime, timezone, UTC
@@ -20,6 +24,9 @@ def create_app(config_class=Config):
     """Application factory function."""
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Initialize Redis Session
+    Session(app)
     
     # Configure logging
     app.start_time = datetime.now(UTC).isoformat()
@@ -30,6 +37,9 @@ def create_app(config_class=Config):
     jwt = JWTManager(app)
     SessionManager(app)
     SecurityHeaders(app)
+
+    # Migrations
+    migrate = Migrate(app, db)
     
     # JWT configuration
     @jwt.user_lookup_loader
@@ -57,53 +67,8 @@ def create_app(config_class=Config):
     app.register_blueprint(vault_api, url_prefix='/api')
     app.register_blueprint(user_api, url_prefix='/api')
     app.register_blueprint(category_api, url_prefix='/api')
-    
-    # Ensure database and tables exist
-    with app.app_context():
-        # Create all tables fresh
-        db.drop_all()
-        db.create_all()
-        
-        admin = User.query.filter_by(role='admin', is_active=True).first()
-        if not admin:
-            # Generate admin credentials
-            admin_password = secrets.token_urlsafe(12)
-            vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
-            
-            # Create admin user with vault salt
-            admin = User(
-                email='admin@localhost',
-                role='admin',
-                is_active=True,
-                vault_key_salt=vault_key_salt
-            )
-            admin.set_password(admin_password)
-            db.session.add(admin)
-            
-            # Initialize admin's vault metadata
-            meta = UserVaultMeta(
-                user_id=1,  # Use 1 since it's the first user
-                key_salt=vault_key_salt
-            )
-            db.session.add(meta)
-            
-            # Create default categories for admin
-            default_categories = ["Business", "Finance", "Personal", "Email", "Shopping"]
-            for category_name in default_categories:
-                category = Category(
-                    user_id=1,  # Use 1 since it's the first user
-                    name=category_name
-                )
-                db.session.add(category)
-            
-            # Commit all changes
-            db.session.commit()
-            
-            print("==============================")
-            print("Default admin account created:")
-            print(f"Email: admin@localhost")
-            print(f"Password: {admin_password}")
-            print("==============================")
+
+    # Database creation moved to init_db.py
 
     return app
 

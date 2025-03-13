@@ -35,18 +35,22 @@ class SecurityHeaders:
             return response
 
 def requires_secure_transport(f):
-    """Decorator to ensure HTTPS is being used"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Skip HTTPS check in development environments
+        # For production behind Nginx
         if current_app.config.get('TESTING', False):
             return f(*args, **kwargs)
             
-        # Skip HTTPS check for localhost
+        # Skip check for localhost or development
         if request.remote_addr == '127.0.0.1' or request.host.startswith('localhost'):
             return f(*args, **kwargs)
             
-        # For all other requests, enforce HTTPS
+        # Check X-Forwarded-Proto header (from Nginx)
+        forwarded_proto = request.headers.get('X-Forwarded-Proto')
+        if forwarded_proto == 'https':
+            return f(*args, **kwargs)
+            
+        # Direct HTTPS check
         if not current_app.testing and not request.is_secure:
             return make_response(jsonify({
                 'message': 'HTTPS required'

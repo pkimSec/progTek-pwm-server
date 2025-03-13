@@ -1,5 +1,5 @@
 # server/routes.py
-import uuid, base64, os, logging
+import uuid, base64, os, logging, json
 import platform, psutil
 from datetime import datetime, timezone, UTC
 
