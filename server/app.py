@@ -12,7 +12,9 @@ from server.category_routes import category_api
 from server.limiter import limiter, init_limiter
 from server.session import SessionManager
 from server.security import SecurityHeaders
+
 import secrets, logging, base64, os
+from datetime import datetime, timezone, UTC
 
 def create_app(config_class=Config):
     """Application factory function."""
@@ -20,6 +22,7 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
     
     # Configure logging
+    app.start_time = datetime.now(UTC).isoformat()
     app.logger.setLevel(logging.INFO)
 
     # Initialize extensions

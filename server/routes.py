@@ -1,17 +1,15 @@
 # server/routes.py
-import uuid
-import base64
-import os
-import logging
+import uuid, base64, os, logging
+import platform, psutil
+from datetime import datetime, timezone, UTC
+
 from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity,
     current_user, get_jwt
 )
 from server.models import db, User
-from datetime import datetime, timezone, UTC
-
-from server.api_session import create_api_session
+from server.api_session import create_api_session, requires_api_session
 
 api = Blueprint('api', __name__)
 
@@ -130,6 +128,52 @@ def debug_session():
         'session_headers': dict(request.headers),
         'cookies': request.cookies
     })
+
+@api.route('/admin/system', methods=['GET'])
+@jwt_required()
+@requires_api_session
+def get_system_info():
+    """Get system information (admin only)"""
+    try:
+        # Check admin permission
+        jwt_data = get_jwt()
+        if jwt_data.get('role') != 'admin':
+            return jsonify({'message': 'Admin role required'}), 403
+            
+        # Get basic system info
+        system_info = {
+            'status': 'online',
+            'server_time': datetime.now(UTC).isoformat(),
+            'hostname': platform.node(),
+            'platform': platform.platform(),
+            'python_version': platform.python_version(),
+            'start_time': getattr(current_app, 'start_time', None)
+        }
+        
+        # Add process info if psutil is available
+        try:
+            process = psutil.Process(os.getpid())
+            
+            # Get process creation time as a datetime object
+            create_time_float = process.create_time()
+            create_time = datetime.fromtimestamp(create_time_float)
+            
+            # Calculate uptime in seconds
+            uptime_seconds = (datetime.now() - create_time).total_seconds()
+            
+            system_info.update({
+                'cpu_percent': process.cpu_percent(),
+                'memory_usage': process.memory_info().rss,
+                'uptime_seconds': uptime_seconds
+            })
+        except (ImportError, AttributeError) as e:
+            current_app.logger.warning(f"psutil metrics error: {str(e)}")
+            
+        return jsonify(system_info), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting system info: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 @api.route('/register', methods=['POST'])
 def register():
