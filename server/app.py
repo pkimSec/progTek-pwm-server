@@ -33,7 +33,7 @@ def create_app(config_class=Config):
     jwt = JWTManager(app)
     SessionManager(app)
     SecurityHeaders(app)
-
+    
     # JWT configuration
     @jwt.user_lookup_loader
     def user_lookup_callback(_jwt_header, jwt_data):
@@ -63,12 +63,15 @@ def create_app(config_class=Config):
     
     # Ensure database and tables exist
     with app.app_context():
-        # Create all tables fresh
-        db.drop_all()
+        # Create tables if they don't exist (don't drop existing tables)
         db.create_all()
         
+        # Check if there's already an admin user
         admin = User.query.filter_by(role='admin', is_active=True).first()
         if not admin:
+            # Only create admin if none exists
+            app.logger.info("No admin user found. Creating default admin account.")
+            
             # Generate admin credentials
             admin_password = secrets.token_urlsafe(12)
             vault_key_salt = base64.b64encode(os.urandom(32)).decode('utf-8')
@@ -107,6 +110,8 @@ def create_app(config_class=Config):
             print(f"Email: admin@localhost")
             print(f"Password: {admin_password}")
             print("==============================")
+        else:
+            app.logger.info(f"Admin user found with email: {admin.email}")
 
     return app
 
