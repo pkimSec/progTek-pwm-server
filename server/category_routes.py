@@ -1,6 +1,7 @@
 # server/category_routes.py
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
+
 from server.models import db, Category
 from server.api_session import requires_api_session
 from server.security import requires_secure_transport

@@ -1,15 +1,18 @@
 # server/routes.py
-import uuid, base64, os, logging
-import platform, psutil
 from datetime import datetime, timezone, UTC
+import uuid
+import base64
+import os
+import platform
+import psutil
 
 from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity,
-    current_user, get_jwt
+    create_access_token, jwt_required, get_jwt_identity, get_jwt
 )
+
 from server.models import db, User
-from server.api_session import create_api_session, requires_api_session, api_sessions, update_session_activity
+from server.api_session import create_api_session, requires_api_session, api_sessions
 
 api = Blueprint('api', __name__)
 
@@ -17,6 +20,7 @@ api = Blueprint('api', __name__)
 
 @api.route('/login', methods=['POST'])
 def login():
+    """User login"""
     try:
         data = request.get_json()
         if not data or not data.get('email') or not data.get('password'):
@@ -61,43 +65,45 @@ def login():
 @api.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
-    """Logout and clear session"""
+    """User Logout and clear session"""
     try:
+        # Get user ID from token
+        user_id = get_jwt_identity()
+        
+        # Clear Flask session
         session.clear()
-        current_app.logger.info(f"User logged out: {get_jwt_identity()}")
+        
+        # Get the session token from header
+        session_token = request.headers.get('X-API-Session-Token')
+        
+        # Log all headers for debugging
+        current_app.logger.info(f"Logout request - Headers: {dict(request.headers)}")
+        
+        # Check if we have a session token and remove from api_sessions
+        if session_token and session_token in api_sessions:
+            current_app.logger.info(f"Removing API session: {session_token}")
+            del api_sessions[session_token]
+        else:
+            # Fall back to removing sessions by user ID
+            sessions_to_remove = []
+            for token, data in api_sessions.items():
+                if str(data.get('user_id')) == user_id:
+                    sessions_to_remove.append(token)
+                    
+            for token in sessions_to_remove:
+                current_app.logger.info(f"Removing user {user_id} session: {token}")
+                del api_sessions[token]
+            
+        current_app.logger.info(f"User {user_id} logged out successfully")
         return jsonify({'message': 'Logged out successfully'}), 200
         
     except Exception as e:
         current_app.logger.error(f"Logout error: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         return jsonify({'message': 'Internal server error'}), 500
 
 # ---------- DEBUG ----------
-
-@api.route('/debug/token', methods=['GET'])
-@jwt_required()
-def debug_token():
-    user_id = get_jwt_identity()
-    jwt_data = get_jwt()
-    current_app.logger.info(f"Debug token data - User ID: {user_id}, JWT: {jwt_data}")
-    current_app.logger.info(f"Session data: {session}")
-    current_app.logger.info(f"user_id in session: {session.get('user_id')}")
-    
-    user = db.session.get(User, int(user_id))
-    return jsonify({
-        'user_id': user_id,
-        'email': user.email if user else None,
-        'role': jwt_data.get('role'),
-        'jwt_data': jwt_data
-    }), 200
-
-@api.route('/api/debug/session', methods=['GET'])
-def debug_session():
-    from flask import session
-    return jsonify({
-        'session_data': dict(session),
-        'session_headers': dict(request.headers),
-        'cookies': request.cookies
-    })
 
 # ---------- ADMIN ROUTES / SYSTEM INFORMATION ----------
 
@@ -264,6 +270,7 @@ def register():
 @api.route('/invite', methods=['POST'])
 @jwt_required()
 def create_invite():
+    """Create an invite code for a new user"""
     try:
         # Get user ID from token
         user_id = get_jwt_identity()

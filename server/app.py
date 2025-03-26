@@ -1,6 +1,13 @@
 # server/app.py
+import secrets
+import logging
+import base64
+import os
+from datetime import datetime, UTC
+
 from flask import Flask
 from flask_jwt_extended import JWTManager
+
 from server.config import Config
 from server.models import db, User, UserVaultMeta, Category
 
@@ -9,12 +16,8 @@ from server.vault_routes import vault_api
 from server.user_routes import user_api
 from server.category_routes import category_api
 
-from server.limiter import limiter, init_limiter
 from server.session import SessionManager
 from server.security import SecurityHeaders
-
-import secrets, logging, base64, os
-from datetime import datetime, timezone, UTC
 
 def create_app(config_class=Config):
     """Application factory function."""
@@ -30,7 +33,7 @@ def create_app(config_class=Config):
     jwt = JWTManager(app)
     SessionManager(app)
     SecurityHeaders(app)
-    
+
     # JWT configuration
     @jwt.user_lookup_loader
     def user_lookup_callback(_jwt_header, jwt_data):

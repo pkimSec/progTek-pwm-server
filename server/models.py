@@ -1,11 +1,16 @@
 # server/models.py
 import uuid
+import base64
+
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+
+from server.crypto import VaultCrypto
 
 db = SQLAlchemy()
 
 class User(db.Model):
+    """Model for storing users"""
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True)
     password_hash = db.Column(db.String(256))
@@ -81,6 +86,7 @@ class UserVaultMeta(db.Model):
     user = db.relationship('User', backref=db.backref('vault_meta', uselist=False))
 
 class UserVault:
+    """Model for the Vault of an user"""
     def __init__(self, user_id: int, master_password: str):
         self.user_id = user_id
         # Generate initial key and salt

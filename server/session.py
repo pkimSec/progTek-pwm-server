@@ -1,12 +1,14 @@
 # Server-side patch for session.py
-
-from flask import session, jsonify, request
+import secrets
+import uuid
 from functools import wraps
 from datetime import datetime, timedelta, UTC
-from flask_jwt_extended import get_jwt, verify_jwt_in_request
-import secrets, uuid
+
+from flask import session, jsonify, request, current_app
+from flask_jwt_extended import verify_jwt_in_request
 
 class SessionManager:
+    """Session management utility"""
     def __init__(self, app=None):
         self.app = app
         self.active_sessions = {}  # In-memory storage for sessions (use Redis in production)
@@ -14,6 +16,7 @@ class SessionManager:
             self.init_app(app)
 
     def init_app(self, app):
+        """Initialization of the session management"""
         self.app = app
         # Configure session settings
         app.config.setdefault('PERMANENT_SESSION_LIFETIME', timedelta(hours=1))
@@ -69,8 +72,6 @@ def add_session_id_to_login_response(user_id, role, response_data):
     Add a session ID to a login response and store session data.
     Use this in your login route to enable the alternative session approach.
     """
-    from flask import current_app
-    
     # Get the session manager instance
     session_manager = current_app.extensions.get('session_manager')
     if not session_manager:

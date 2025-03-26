@@ -2,6 +2,7 @@
 from datetime import timedelta
 
 class Config:
+    """Configuration for server"""
     SECRET_KEY = 'dev-secret-key'  # Change in production
     SQLALCHEMY_DATABASE_URI = 'sqlite:///password_manager.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False

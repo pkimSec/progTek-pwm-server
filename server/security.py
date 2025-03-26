@@ -1,15 +1,17 @@
 # server/security.py
-import pytest
 from functools import wraps
+
 from flask import make_response, request, jsonify, current_app
 
 class SecurityHeaders:
+    """Security enhancements for the server"""
     def __init__(self, app=None):
         self.app = app
         if app is not None:
             self.init_app(app)
 
     def init_app(self, app):
+        """Security initialization"""
         self.app = app
         
         @app.after_request

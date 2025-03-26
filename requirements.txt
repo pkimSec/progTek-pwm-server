@@ -8,18 +8,3 @@ SQLAlchemy
 PyJWT
 cryptography
 psutil
-
-# Testing and development
-pytest
-pytest-cov
-pytest-qt
-pytest-mock
-black
-flake8
-python-dotenv
-setuptools
-
-# For later use in client
-PyQt6
-requests
-requests-mock

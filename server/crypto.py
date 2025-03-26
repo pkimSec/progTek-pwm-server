@@ -1,13 +1,15 @@
 # server/crypto.py
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.exceptions import InvalidTag
 import base64
 import os
 import json
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
+
 class VaultCrypto:
+    """Cryptography for the Vault-system"""
     SALT_LENGTH = 16
     KEY_LENGTH = 32  # 256 bits
     ITERATIONS = 100_000
@@ -81,6 +83,7 @@ class VaultCrypto:
             raise ValueError("Decryption failed - invalid key or corrupted data") from e
 
 class UserVault:
+    """Cryptography for the User-Vault"""
     def __init__(self, user_id: int, master_password: str):
         """Initialize vault with user ID and master password"""
         self.user_id = user_id

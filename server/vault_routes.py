@@ -1,13 +1,15 @@
 # server/vault_routes.py
+from datetime import datetime, UTC
+import base64
+import os
+
 from flask import Blueprint, request, jsonify, current_app, session
 from flask_jwt_extended import jwt_required, get_jwt_identity
+
 from server.models import db, PasswordEntry, UserVaultMeta, User, PasswordEntryVersion
-from server.crypto import UserVault, VaultCrypto
-from server.session import requires_active_session
+from server.crypto import UserVault
 from server.api_session import requires_api_session
 from server.security import requires_secure_transport
-from datetime import datetime, UTC
-import json, base64, os
 
 vault_api = Blueprint('vault_api', __name__)
 

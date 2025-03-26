@@ -1,11 +1,13 @@
 # server/user_routes.py
+import base64
+import os
+
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+
 from server.models import db, User, UserVaultMeta
 from server.api_session import requires_api_session
 from server.security import requires_secure_transport
-
-import base64, os, json
 
 user_api = Blueprint('user_api', __name__)
 
